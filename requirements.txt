@@ -1,0 +1,13 @@
+numpy
+torch
+rouge
+tqdm
+transformers
+simtext
+safetensors
+evaluate
+jieba
+pandas
+pyarrow
+einops
+PyYAML

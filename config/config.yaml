@@ -1,0 +1,38 @@
+paths:
+  news_file_path_sp: "./data/news_simplified.tsv"
+  news_file_path: "./data/PENS/news.tsv"
+  train_file_path: "./data/PENS/train.tsv"
+  dev_file_path: "./data/PENS/valid.tsv"
+  test_file_path: "./data/PENS/personalized_test.tsv"
+  processed_data_path: "./data/processed_lower/"
+  model_path: "./ckpt/"
+  fact_ckpt: "./cache/facc_finetuned"
+
+model:
+  bart_name: './cache/bart-base'
+  model_type: 'bart-base'
+  user_type: "rnn"
+  device: "cuda:6"
+  encoder_cross_attention_heads: 1
+
+training:
+  limit: 5
+  max_news_title_length: 100
+  max_news_body_length: 1024
+  max_click_length: 50
+  batch_size: 8
+  pretrain_lr: 3e-5
+  step_2_lr: 1e-4
+  step_3_lr: 3e-5
+  step_4_lr: 1e-7
+  pretrain_epoch_num: 5
+  train_step_2_epoch_num: 5
+  train_step_3_epoch_num: 9
+  train_step_4_epoch_num: 3
+  beam_size: 3
+
+steps:
+  TRAIN_STEP_1: 0
+  TRAIN_STEP_2: 0
+  TRAIN_STEP_3: 0
+  TRAIN_STEP_4: 0
