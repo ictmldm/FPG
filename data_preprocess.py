@@ -11,7 +11,7 @@ import os
 import logging
 from datetime import datetime
 
-# 配置日志
+# Configure logging
 log_filename = f"./logs/data_preprocessing.log"
 # _{datetime.now().strftime('%Y%m%d_%H%M%S')}
 logging.basicConfig(
@@ -20,46 +20,88 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-# 检查并创建保存处理数据的目录
+# Check and create directory for processed data
 if not os.path.exists(processed_data_path):
     os.makedirs(processed_data_path)
-    logging.info(f"创建目录: {processed_data_path}")
+    logging.info(f"Created directory: {processed_data_path}")
 
 
 def load_data(file_path, data_type='news'):
-    """加载数据"""
-    logging.info(f"加载{data_type}数据: {file_path}")
+    """
+    Loads data from a tab-separated file.
+
+    Args:
+        file_path (str): Path to the data file.
+        data_type (str): Type of data being loaded (e.g., 'news', 'train').
+
+    Returns:
+        pd.DataFrame: Loaded data.
+    """
+    logging.info(f"Loading {data_type} data: {file_path}")
     data = pd.read_csv(file_path, sep='\t')
     data.fillna(value=" ", inplace=True)
-    logging.info(f"{data_type}数据加载完成")
+    logging.info(f"{data_type} data loaded successfully")
     return data
 
 
 def prepare_tokenizer(bart_name):
-    """准备Bart分词器"""
-    logging.info(f"加载Bart分词器: {bart_name}")
+    """
+    Prepares the Bart tokenizer.
+
+    Args:
+        bart_name (str): Name or path of the pre-trained Bart model.
+
+    Returns:
+        BartTokenizer: Loaded Bart tokenizer.
+    """
+    logging.info(f"Loading Bart tokenizer: {bart_name}")
     tokenizer = BartTokenizer.from_pretrained(
         bart_name,
         trust_remote_code=True,
         local_files_only=True,
         do_lower_case=True
     )
-    logging.info("Bart分词器加载完成")
+    logging.info("Bart tokenizer loaded successfully")
     return tokenizer
 
 
 def build_news_dict(news_ids):
-    """构建新闻索引字典"""
-    logging.info("构建新闻索引字典")
+    """
+    Builds a dictionary mapping news IDs to indices.
+
+    Args:
+        news_ids (list): List of news IDs.
+
+    Returns:
+        dict: Dictionary mapping news ID to index (1-based).
+    """
+    logging.info("Building news index dictionary")
     news_dict = {news_id: idx + 1 for idx, news_id in enumerate(news_ids)}
-    logging.info("新闻索引字典构建完成")
+    logging.info("News index dictionary built successfully")
     return news_dict
 
 
 def process_test_data(test, news_titles, news_bodys, news_dict, tokenizer,
                      max_click_length, max_news_title_length, max_news_body_length):
-    """处理测试数据"""
-    logging.info("开始处理测试数据")
+    """
+    Processes test data, encoding click history, news bodies, and collecting positive titles.
+
+    Args:
+        test (pd.DataFrame): Test data.
+        news_titles (np.ndarray): Array of news titles.
+        news_bodys (np.ndarray): Array of news bodies.
+        news_dict (dict): Dictionary mapping news IDs to indices.
+        tokenizer (BartTokenizer): Bart tokenizer.
+        max_click_length (int): Maximum length of click history.
+        max_news_title_length (int): Maximum length for news titles.
+        max_news_body_length (int): Maximum length for news bodies.
+
+    Returns:
+        tuple: A tuple containing:
+            - pd.DataFrame: Processed test samples.
+            - set: Set of unique news IDs used in the test set.
+    """
+    logging.info("Starting test data processing")
     # process testset
     h_inputs = []
     h_masks = []
@@ -124,9 +166,9 @@ def process_test_data(test, news_titles, news_bodys, news_dict, tokenizer,
             bodys_masks.append(body_mask.squeeze(0).tolist())
             p_titles.append(title)
 
-    print("test_ids: {}".format(len(test_ids)))
-    logging.info("测试数据处理完成")
-    logging.info(f"测试数据ID总数: {len(test_ids)}")
+    print(f"test_ids: {len(test_ids)}")
+    logging.info("Test data processing completed")
+    logging.info(f"Total test data IDs: {len(test_ids)}")
     test_samples = pd.DataFrame({
         'h_inputs': h_inputs,
         'h_masks': h_masks,
@@ -134,16 +176,31 @@ def process_test_data(test, news_titles, news_bodys, news_dict, tokenizer,
         'bodys_masks': bodys_masks,
         'p_titles': p_titles
     })
-    print("test_logs:{}".format(len(test_samples)))
+    print(f"test_samples: {len(test_samples)}")
     test_samples.to_feather(os.path.join(processed_data_path, 'test.feather'))
-    logging.info(f"测试数据保存完成，共 {len(test_samples)} 样本")
+    logging.info(f"Test data saved successfully, total {len(test_samples)} samples")
 
     return test_samples, test_ids  # Return test_ids for exclusion
 
 
 def process_click_history(click_history_ids, news_titles, news_dict, tokenizer,
                          max_click_length, data_type="train"):
-    """处理点击历史"""
+    """
+    Processes click history, converting IDs to titles and handling padding/truncation.
+
+    Args:
+        click_history_ids (str): Comma or space separated string of click history news IDs.
+        news_titles (np.ndarray): Array of news titles.
+        news_dict (dict): Dictionary mapping news IDs to indices.
+        tokenizer (BartTokenizer): Bart tokenizer.
+        max_click_length (int): Maximum length of click history.
+        data_type (str): Type of data ('train' or 'test') to handle different separators.
+
+    Returns:
+        tuple: A tuple containing:
+            - list: Processed click history titles.
+            - list: Attention mask for the click history.
+    """
     # convert ids to titles
     click_history_ids = click_history_ids.split(",") if data_type == "test" else click_history_ids.split(" ")
     click_history = [news_titles[news_dict[id] - 1] for id in click_history_ids]
@@ -161,7 +218,20 @@ def process_click_history(click_history_ids, news_titles, news_dict, tokenizer,
 
 
 def encode_text(text, tokenizer, max_length, replace_first_token=False):
-    """编码文本"""
+    """
+    Encodes text using the tokenizer.
+
+    Args:
+        text (str or list): Text or list of texts to encode.
+        tokenizer (BartTokenizer): Bart tokenizer.
+        max_length (int): Maximum length for encoding.
+        replace_first_token (bool): Whether to replace the first token with EOS token ID.
+
+    Returns:
+        tuple: A tuple containing:
+            - list: Encoded input IDs.
+            - list: Attention mask.
+    """
     text_encoded = tokenizer(
         text,
         max_length=max_length,
@@ -170,14 +240,39 @@ def encode_text(text, tokenizer, max_length, replace_first_token=False):
         return_tensors='pt'
     )
     if replace_first_token:
+        # Replace the first token (usually BOS) with EOS token ID for title generation target
         text_encoded['input_ids'][0][0] = tokenizer.eos_token_id
     return text_encoded['input_ids'].squeeze(0).tolist(), text_encoded['attention_mask'].squeeze(0).tolist()
 
 
 def process_samples(samples, news_titles, news_bodys, news_dict, tokenizer,
                    max_click_length, max_news_title_length, max_news_body_length, limit=None):
-    """处理样本数据"""
-    logging.info("开始处理样本数据")
+    """
+    Processes sample data (train/validation), encoding inputs and targets.
+
+    Args:
+        samples (pd.DataFrame): Sample data.
+        news_titles (np.ndarray): Array of news titles.
+        news_bodys (np.ndarray): Array of news bodies.
+        news_dict (dict): Dictionary mapping news IDs to indices.
+        tokenizer (BartTokenizer): Bart tokenizer.
+        max_click_length (int): Maximum length of click history.
+        max_news_title_length (int): Maximum length for news titles.
+        max_news_body_length (int): Maximum length for news bodies.
+        limit (int, optional): Maximum number of samples per news ID. Defaults to None.
+
+    Returns:
+        tuple: A tuple containing:
+            - list: Processed history input IDs.
+            - list: Processed history masks.
+            - list: Processed body input IDs.
+            - list: Processed body masks.
+            - list: Processed title input IDs.
+            - list: Processed title masks.
+            - dict: Count of samples per news ID.
+            - dict: Count of samples per user ID.
+    """
+    logging.info("Starting sample data processing")
     h_inputs, h_masks, bodys, bodys_masks, titles, titles_masks = [], [], [], [], [], []
     news_count, user_count = {}, {}
     pbar = tqdm(range(len(samples)), desc="Processing Samples")
@@ -223,14 +318,29 @@ def process_samples(samples, news_titles, news_bodys, news_dict, tokenizer,
             titles.append(title_input_ids)
             titles_masks.append(title_mask)
 
-    logging.info("样本数据处理完成")
+    logging.info("Sample data processing completed")
     return h_inputs, h_masks, bodys, bodys_masks, titles, titles_masks, news_count, user_count
 
 
 def process_raw_test(test, news_titles, news_bodys, news_dict, tokenizer, max_click_length):
-    """处理测试数据"""
-    logging.info("开始处理raw测试数据")
-    h_inputs, bodys, o_titles, p_titles, test_ids = [], [], [], [], []
+    """
+    Processes raw test data, collecting original history, bodies, and titles.
+
+    Args:
+        test (pd.DataFrame): Raw test data.
+        news_titles (np.ndarray): Array of news titles.
+        news_bodys (np.ndarray): Array of news bodies.
+        news_dict (dict): Dictionary mapping news IDs to indices.
+        tokenizer (BartTokenizer): Bart tokenizer.
+        max_click_length (int): Maximum length of click history.
+
+    Returns:
+        tuple: A tuple containing:
+            - pd.DataFrame: Processed raw test samples.
+            - set: Set of unique news IDs used in the raw test set.
+    """
+    logging.info("Starting raw test data processing")
+    h_inputs, bodys, o_titles, p_titles, test_ids = [], [], [], [], set()
 
     for _, click_history_ids, pos_ids, titles in tqdm(test.itertuples(index=False), total=len(test), desc="Processing Raw Test Data"):
         click_history, _ = process_click_history(
@@ -261,13 +371,24 @@ def process_raw_test(test, news_titles, news_bodys, news_dict, tokenizer, max_cl
         'p_titles': p_titles
     })
     test_samples.to_feather(os.path.join(processed_data_path, 'raw_test.feather'))
-    logging.info("raw测试数据处理完成")
+    logging.info("Raw test data processing completed")
     return test_samples, test_ids
 
 
 def save_samples_to_feather(file_name, h_inputs, h_masks, bodys, bodys_masks, titles=None, titles_masks=None):
-    """保存样本数据到Feather文件"""
-    logging.info(f"保存样本数据到: {file_name}")
+    """
+    Saves sample data to a Feather file.
+
+    Args:
+        file_name (str): Name of the output feather file.
+        h_inputs (list): List of history input IDs.
+        h_masks (list): List of history masks.
+        bodys (list): List of body input IDs.
+        bodys_masks (list): List of body masks.
+        titles (list, optional): List of title input IDs. Defaults to None.
+        titles_masks (list, optional): List of title masks. Defaults to None.
+    """
+    logging.info(f"Saving sample data to: {file_name}")
     data = {
         'h_inputs': h_inputs,
         'h_masks': h_masks,
@@ -279,11 +400,11 @@ def save_samples_to_feather(file_name, h_inputs, h_masks, bodys, bodys_masks, ti
         data['titles_masks'] = titles_masks
     samples = pd.DataFrame(data)
     samples.to_feather(os.path.join(processed_data_path, file_name))
-    logging.info(f"样本数据保存完成: {file_name}")
+    logging.info(f"Sample data saved successfully: {file_name}")
 
 
 def main():
-    logging.info("开始加载数据")
+    logging.info("Starting data loading")
     news = load_data(news_file_path_sp)
     train = load_data(train_file_path, 'train')
     valid = load_data(dev_file_path, 'valid')
@@ -293,42 +414,42 @@ def main():
     news_dict = build_news_dict(news_ids)
     tokenizer = prepare_tokenizer(bart_name)
 
-    # 处理测试数据并获取测试用的新闻ID
-    logging.info("处理测试数据")
+    # Process test data and get news IDs used in test set
+    logging.info("Processing test data")
     test_samples, test_ids = process_test_data(
         test, news_titles, news_bodys, news_dict, tokenizer,
         max_click_length, max_news_title_length, max_news_body_length
     )
 
-    # 处理训练数据并获取训练用的新闻ID
+    # Process training data and get news IDs used in training set
     h_inputs, h_masks, bodys, bodys_masks, titles, titles_masks, train_news_count, train_user_count = process_samples(
         train, news_titles, news_bodys, news_dict, tokenizer,
         max_click_length, max_news_title_length, max_news_body_length, limit=limit
     )
     save_samples_to_feather(f"train_limit_to_{limit}.feather", h_inputs, h_masks, bodys, bodys_masks, titles, titles_masks)
-    logging.info(f"训练数据处理完成: {len(train)} 样本")
-    logging.info(f"{len(train_news_count)} 新闻, {len(train_user_count)} 用户")
+    logging.info(f"Training data processing completed: {len(train)} samples")
+    logging.info(f"{len(train_news_count)} news, {len(train_user_count)} users")
 
-    # 处理验证数据
-    logging.info("处理验证数据")
+    # Process validation data
+    logging.info("Processing validation data")
     h_inputs, h_masks, bodys, bodys_masks, titles, titles_masks, valid_news_count, valid_user_count = process_samples(
         valid, news_titles, news_bodys, news_dict, tokenizer,
         max_click_length, max_news_title_length, max_news_body_length
     )
     save_samples_to_feather("valid.feather", h_inputs, h_masks, bodys, bodys_masks, titles, titles_masks)
-    logging.info(f"验证数据处理完成: {len(valid)} 样本")
-    logging.info(f"{len(valid_news_count)} 新闻, {len(valid_user_count)} 用户")
+    logging.info(f"Validation data processing completed: {len(valid)} samples")
+    logging.info(f"{len(valid_news_count)} news, {len(valid_user_count)} users")
 
-    # 收集所有需要排除的新闻ID（训练和测试）
+    # Collect all news IDs to exclude (from training and test)
     used_news_ids = set(train_news_count.keys()).union(set(test_ids))
-    logging.info(f"预训练数据将排除 {len(used_news_ids)} 条新闻ID来自训练和测试数据")
+    logging.info(f"Pre-training data will exclude {len(used_news_ids)} news IDs from training and test data")
 
-    # 处理预训练数据
-    logging.info("处理预训练数据")
+    # Process pre-training data
+    logging.info("Processing pre-training data")
     body_inputs, body_masks, title_inputs, title_masks = [], [], [], []
     for id in tqdm(news_ids, desc="Processing Pretrain Data"):
         # if id in used_news_ids:
-        #     continue
+        #     continue # This line is commented out, so all news are included
         body = news_bodys[news_dict[id] - 1]
         title = news_titles[news_dict[id] - 1]
         if len(title.strip()) == 0 or len(body.strip()) == 0:
@@ -349,16 +470,16 @@ def main():
         'title_masks': title_masks
     })
     pretrain_samples.to_feather(os.path.join(processed_data_path, "pretrain.feather"))
-    logging.info(f"预训练数据处理完成: {len(pretrain_samples)} 样本")
+    logging.info(f"Pre-training data processing completed: {len(pretrain_samples)} samples")
 
 
 if __name__ == "__main__":
-    # 如果简化文件不存在
+    # If simplified file does not exist
     if not os.path.exists(news_file_path_sp):
-        logging.info(f"简化数据不存在: {news_file_path_sp}")
-        logging.info("正在生成简化数据")
+        logging.info(f"Simplified data does not exist: {news_file_path_sp}")
+        logging.info("Generating simplified data")
         news = pd.read_csv(news_file_path, sep='\t')
         news[['News ID', 'Headline', 'News body']].to_csv(news_file_path_sp, sep='\t', index=False)
-        logging.info("简化数据生成完成")
+        logging.info("Simplified data generation completed")
 
     main()

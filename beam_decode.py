@@ -7,7 +7,15 @@ class Beam:
     """ Beam search class for managing beams during decoding """
 
     def __init__(self, size, pad, eos, device=device):
+        """
+        Initializes a Beam object.
 
+        Args:
+            size (int): The size of the beam.
+            pad (int): The ID of the padding token.
+            eos (int): The ID of the end-of-sequence token.
+            device (torch.device): The device to use for tensors.
+        """
         self.size = size  # Beam size
         self._done = False  # Flag to indicate if the beam search is complete
         self.PAD = pad  # Padding token ID
@@ -32,7 +40,16 @@ class Beam:
         return self._done
 
     def advance(self, word_logprob):    # beam * vocab
-        """Update beam status and check if finished or not."""
+        """
+        Update beam status and check if finished or not.
+
+        Args:
+            word_logprob (torch.Tensor): Log probabilities of the next word for each beam.
+                                         Shape: (beam_size, vocab_size)
+
+        Returns:
+            bool: True if the beam search is complete for this instance, False otherwise.
+        """
         num_words = word_logprob.size(1)  # Vocabulary size
 
         # Sum the previous scores.
@@ -84,7 +101,15 @@ class Beam:
         return dec_seq
 
     def get_hypothesis(self, k):
-        """ Walk back to construct the full hypothesis by walking back through the backpointers."""
+        """
+        Walk back to construct the full hypothesis by walking back through the backpointers.
+
+        Args:
+            k (int): The index of the hypothesis in the current step.
+
+        Returns:
+            list: The list of token IDs representing the hypothesis.
+        """
         # print(k.type())
         hyp = []
         for j in range(len(self.prev_ks) - 1, -1, -1):
@@ -94,14 +119,44 @@ class Beam:
 
 
 def beam_search(model, h_src, h_mask, src, src_mask, max_len, pad, eos, beam_size, device):
-    """ Perform beam search for sequence generation """
+    """
+    Perform beam search for sequence generation.
+
+    Args:
+        model (torch.nn.Module): The model to use for decoding.
+        h_src (torch.Tensor): Encoded history source tensor.
+        h_mask (torch.Tensor): Attention mask for history source.
+        src (torch.Tensor): Encoded source tensor.
+        src_mask (torch.Tensor): Attention mask for source.
+        max_len (int): Maximum length of the generated sequence.
+        pad (int): ID of the padding token.
+        eos (int): ID of the end-of-sequence token.
+        beam_size (int): The size of the beam.
+        device (torch.device): The device to use for tensors.
+
+    Returns:
+        tuple: A tuple containing:
+            - list: List of generated hypotheses (token IDs).
+            - list: List of scores for the generated hypotheses.
+    """
 
     def get_inst_idx_to_tensor_position_map(inst_idx_list):
         """ Map instance indices to tensor positions. """
         return {inst_idx: tensor_position for tensor_position, inst_idx in enumerate(inst_idx_list)}
 
     def collect_active_part(beamed_tensor, curr_active_inst_idx, n_prev_active_inst, n_bm):
-        """ Collect tensor parts associated with active instances. """
+        """
+        Collect tensor parts associated with active instances.
+
+        Args:
+            beamed_tensor (torch.Tensor): The tensor to collect parts from.
+            curr_active_inst_idx (list): List of indices of currently active instances.
+            n_prev_active_inst (int): Number of previously active instances.
+            n_bm (int): Beam size.
+
+        Returns:
+            torch.Tensor: Tensor containing parts for active instances.
+        """
         _, *d_hs = beamed_tensor.size()
         n_curr_active_inst = len(curr_active_inst_idx)
         # active instances (elements of batch) * beam search size x seq_len x h_dimension
@@ -115,6 +170,23 @@ def beam_search(model, h_src, h_mask, src, src_mask, max_len, pad, eos, beam_siz
         return beamed_tensor
 
     def collate_active_info(src_enc, user, src_mask, inst_idx_to_position_map, active_inst_idx_list):
+        """
+        Collect information for active instances.
+
+        Args:
+            src_enc (torch.Tensor): Encoded source tensor.
+            user (torch.Tensor, optional): User vector tensor.
+            src_mask (torch.Tensor): Attention mask for source.
+            inst_idx_to_position_map (dict): Mapping from instance index to tensor position.
+            active_inst_idx_list (list): List of indices of currently active instances.
+
+        Returns:
+            tuple: A tuple containing:
+                - torch.Tensor: Active encoded source tensor.
+                - torch.Tensor: Active user vector tensor (or None).
+                - torch.Tensor: Active source attention mask.
+                - dict: Updated mapping from instance index to tensor position.
+        """
         # Sentences which are still active are collected,
         # so the decoder will not run on completed sentences.
         n_prev_active_inst = len(inst_idx_to_position_map)
@@ -133,7 +205,21 @@ def beam_search(model, h_src, h_mask, src, src_mask, max_len, pad, eos, beam_siz
 
     def beam_decode_step(
             inst_dec_beams, len_dec_seq, enc_output, user, src_mask, inst_idx_to_position_map, n_bm):
-        """ Decode and update beam status, and then return active beam idx """
+        """
+        Decode and update beam status, and then return active beam idx.
+
+        Args:
+            inst_dec_beams (list): List of Beam objects.
+            len_dec_seq (int): Current length of the decoded sequence.
+            enc_output (torch.Tensor): Encoder output tensor.
+            user (torch.Tensor, optional): User vector tensor.
+            src_mask (torch.Tensor): Attention mask for source.
+            inst_idx_to_position_map (dict): Mapping from instance index to tensor position.
+            n_bm (int): Beam size.
+
+        Returns:
+            list: List of indices of active instances.
+        """
 
         def prepare_beam_dec_seq(inst_dec_beams, len_dec_seq):
             """ Prepare the partial sequence for each beam. """
@@ -189,7 +275,18 @@ def beam_search(model, h_src, h_mask, src, src_mask, max_len, pad, eos, beam_siz
         return active_inst_idx_list
 
     def collect_hypothesis_and_scores(inst_dec_beams, n_best):
-        """ Collect the final hypotheses and scores. """
+        """
+        Collect the final hypotheses and scores.
+
+        Args:
+            inst_dec_beams (list): List of Beam objects.
+            n_best (int): Number of best hypotheses to collect.
+
+        Returns:
+            tuple: A tuple containing:
+                - list: List of generated hypotheses (token IDs).
+                - list: List of scores for the generated hypotheses.
+        """
         all_hyp, all_scores = [], []
         for inst_idx in range(len(inst_dec_beams)):
             scores, tail_idxs = inst_dec_beams[inst_idx].sort_scores()

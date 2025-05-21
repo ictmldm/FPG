@@ -28,7 +28,7 @@ training:
   pretrain_epoch_num: 5
   train_step_2_epoch_num: 5
   train_step_3_epoch_num: 9
-  train_step_4_epoch_num: 3
+  train_step_4_epoch_num: 1 # as FPG paper
   beam_size: 3
 
 steps:

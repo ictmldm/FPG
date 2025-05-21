@@ -3,7 +3,14 @@ import torch
 #device = torch.device("cuda:1")
 
 def _truncate_seq_pair(tokens_a, tokens_b, max_length):
-    """Truncates a sequence pair in place to the maximum length."""
+    """
+    Truncates a sequence pair in place to the maximum length.
+
+    Args:
+        tokens_a (list): List of tokens for the first sequence.
+        tokens_b (list): List of tokens for the second sequence.
+        max_length (int): The maximum total length for the sequence pair.
+    """
 
     # This is a simple heuristic which will always truncate the longer sequence
     # one token at a time. This makes more sense than truncating an equal percent
@@ -24,6 +31,20 @@ class InputFeatures(object):
     def __init__(self, input_ids, input_mask, segment_ids,
                  extraction_mask=None, extraction_start_ids=None, extraction_end_ids=None,
                  augmentation_mask=None, augmentation_start_ids=None, augmentation_end_ids=None):
+        """
+        Initializes an InputFeatures object.
+
+        Args:
+            input_ids (list): List of token IDs.
+            input_mask (list): List of attention mask values (1 for real tokens, 0 for padding).
+            segment_ids (list): List of segment IDs (0 for first sequence, 1 for second).
+            extraction_mask (list, optional): Mask for extraction span.
+            extraction_start_ids (list, optional): Start indices for extraction.
+            extraction_end_ids (list, optional): End indices for extraction.
+            augmentation_mask (list, optional): Mask for augmentation span.
+            augmentation_start_ids (list, optional): Start indices for augmentation.
+            augmentation_end_ids (list, optional): End indices for augmentation.
+        """
         self.input_ids = input_ids
         self.input_mask = input_mask
         self.segment_ids = segment_ids
@@ -49,6 +70,30 @@ def convert_examples_to_features(claims, docs, max_seq_length,
                                  sequence_b_segment_id=1,
                                  mask_padding_with_zero=True
                                  ):
+    """
+    Loads a data file into a list of `InputBatch`s.
+
+    Args:
+        claims (list): List of claim strings.
+        docs (list): List of document strings.
+        max_seq_length (int): The maximum sequence length.
+        tokenizer: The tokenizer to use.
+        device (torch.device): The device to use for tensors.
+        cls_token_at_end (bool, optional): Whether the CLS token is at the end. Defaults to False.
+        cls_token (str, optional): The CLS token string. Defaults to '[CLS]'.
+        cls_token_segment_id (int, optional): The segment ID for the CLS token. Defaults to 1.
+        sep_token (str, optional): The SEP token string. Defaults to '[SEP]'.
+        sep_token_extra (bool, optional): Whether to add an extra SEP token. Defaults to False.
+        pad_on_left (bool, optional): Whether to pad on the left. Defaults to False.
+        pad_token (int, optional): The ID of the padding token. Defaults to 0.
+        pad_token_segment_id (int, optional): The segment ID for the padding token. Defaults to 0.
+        sequence_a_segment_id (int, optional): The segment ID for sequence A. Defaults to 0.
+        sequence_b_segment_id (int, optional): The segment ID for sequence B. Defaults to 1.
+        mask_padding_with_zero (bool, optional): Whether to mask padding with zero. Defaults to True.
+
+    Returns:
+        dict: A dictionary containing input tensors ('input_ids', 'attention_mask', 'token_type_ids').
+    """
     """ Loads a data file into a list of `InputBatch`s
         `cls_token_at_end` define the location of the CLS token:
             - False (Default, BERT/XLM pattern): [CLS] + A + [SEP] + B + [SEP]
@@ -58,11 +103,13 @@ def convert_examples_to_features(claims, docs, max_seq_length,
     features = []
     for i in range(len(claims)):
         # tokens_a 为 context, tokens_b 为 claim
+        # tokens_a is context, tokens_b is claim
         tokens_a = tokenizer.tokenize(docs[i])
         tokens_b = tokenizer.tokenize(claims[i])
         
         special_tokens_count = 4 if sep_token_extra else 3
         # 如果序列过长，就进行裁剪
+        # Truncate sequences if they are too long
         if len(tokens_a) + len(tokens_b)> max_seq_length - special_tokens_count:
             _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - special_tokens_count)
         # The convention in BERT is:
